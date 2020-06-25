@@ -1,4 +1,4 @@
-# Crawl-job-LIn
+# LinkedIn jobs scraper
 Web-scrapper with selenium to scrape up to 1000 per day jobs from LinkedIn including premium insights
 
 
