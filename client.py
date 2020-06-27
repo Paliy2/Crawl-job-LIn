@@ -66,35 +66,51 @@ def scroll_job_panel(driver):
     driver.execute_script(javascript)
 
 
-def scroll_data_panel(driver):
+def scroll_data_panel(driver, banned=False):
     """
     Scroll the left panel containing the job offers by sending PAGE_DOWN
     key until the very end has been reached
     :param driver: selenium chrome driver object
     :return: None
     """
+    x = 15
+    if banned:
+        # additional time to load pages
+        time.sleep(.2)
+        x = 35
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+
     # panel = driver.find_element_by_class_name('job-view-layout jobs-details ember-view')
     xpath_1 = '/html/body/div[8]/div[3]/div[2]/div[2]/div/div/div'
     xpath_2 = '/html/body/div[7]/div[3]/div[2]/div[2]/div/div/div'
     xpath = '//*[@id="ember213"]'
     x_path_3 = '/html/body/div[7]/div[3]/div[2]/div[2]/div/div/div/div/div[1]'
-    pathes = [xpath_2, xpath_1, x_path_3, xpath]
+    x_path_4 = '/html/body/div[8]/div[3]/div[2]/div[3]/div/div/div'
+    x_path_5 = '/html/body/div[7]/div[3]/div[2]/div[3]/div/div/div'
+    # x_path_6 = ''
+
+    pathes = [xpath_2, xpath_1, x_path_4, x_path_3, x_path_5, xpath]
     last_height = driver.execute_script(
         "return document.getElementsByClassName(" +
         "'jobs-search-results')[0].scrollHeight")
+
     for path in pathes:
         try:
             panel = driver.find_element_by_xpath(path)
             if panel:
+                print('[INFO] XPath founf')
                 break
         except:
             print('Choosing another Xpath')
 
     while True:
+        print('started scrolling')
         time.sleep(.1)
-        for i in range(14):
+        for i in range(x):
             panel.send_keys(Keys.PAGE_DOWN)
             time.sleep(.1)
+
+        print('Done scroling')
         new_height = driver.execute_script(
             "return document.getElementsByClassName(" +
             "'jobs-search-results')[0].scrollHeight")
@@ -184,7 +200,7 @@ class LIClient(object):
                 scroll_job_panel(self.driver)
                 time.sleep(3)
 
-                print(self.driver.page_source)
+                # print(self.driver.page_source)
                 soup = BeautifulSoup(self.driver.page_source, 'lxml')
                 urls = soup.find_all('a', class_='disabled ember-view job-card-container__link job-card-list__title')
                 urls2 = soup.find_all('a', class_='disabled ember-view job-card-container__link job-card-list__title ')
@@ -215,22 +231,24 @@ class LIClient(object):
             else:
                 print('Done')
 
-    def parse_all_jobs(self):
+    def parse_all_jobs(self, write_headers=True):
         file = 'links.txt'
 
         with open(file, 'r', encoding='utf-8') as f:
-            links = f.readlines()
+            links = f.read().split('\n')
+            links = [i for i in links if i != '']
+            print(links)
 
-        with open(RESULT_FILE, 'a', encoding='utf-8') as f:
-            data = f.read()
-            if len(data) < 10:
+        if write_headers:
+            with open(RESULT_FILE, 'a', encoding='utf-8') as f:
                 f.write(
-                'job_url;job_name;company;company_url;full_field;location;posted_on;views;num_of_applicants;seniority;num_of_employees;job_location;job_description;employment_type;job_functions;industry;past_day_applicants;applicants_seniority;applicants_education;applicants_location;company_growth;followers')
+                    'job_url;job_name;company;company_url;full_field;location;posted_on;views;num_of_applicants;seniority;num_of_employees;job_location;job_description;employment_type;job_functions;industry;past_day_applicants;applicants_seniority;applicants_education;applicants_location;company_growth;followers')
 
         # loop through each link
         while links:
             url = links[0]
             try:
+                # if True:
                 a = url
                 start = time.time()
                 new_url = 'https://www.linkedin.com/' + url
@@ -241,20 +259,22 @@ class LIClient(object):
 
                 # if got page then scroll it to load
                 try:
-                    scroll_data_panel(self.driver)
+                    scroll_data_panel(self.driver, True)
                 except JavascriptException:
                     # page is already loaded
                     pass
                 except ElementNotInteractableException:
                     pass
+                except UnboundLocalError:
+                    print('Unbound Local Error, cannot locate scrolling element')
 
                 # wait to load
-                time.sleep(.9)
+                time.sleep(1.2)
                 soup = BeautifulSoup(self.driver.page_source, 'lxml')
                 soup = soup.find('div', role='main')
                 if not soup:
                     # just wait to load
-                    time.sleep(2)
+                    time.sleep(4)
                     soup = BeautifulSoup(self.driver.page_source, 'lxml')
                     soup = soup.find('div', role='main')
 
@@ -267,8 +287,28 @@ class LIClient(object):
                     input('Press enter after you resolved the captcha')
                     print('Done')
                     time.sleep(3)
-                    self.login()  # and also resolve the captcha
+                    # if False:
+
+                    if 'sign in' in self.driver.page_source:
+                        self.driver.navigate(
+                            'https://www.linkedin.com/login?fromSignIn=true&trk=guest_homepage-basic_nav-header-signin')
+                        self.login()
+                        # todo also resolve the captcha
+                        try:
+                            checkbox = self.driver.find_element_by_id('recaptcha-anchor')
+                            checkbox.click()
+                        except:
+                            print('unable to locate box')
+                            time.sleep(15)
+
+                            self.parse_all_jobs(write_headers=False)
+
+                    if len(links) > 3:
+                        links[0], links[-1] = links[-1], links[0]
+                    else:
+                        break
                     continue
+
                 # exctract job data
                 js = JobScraper(soup, url)
                 job_data = js.get_job_data()
@@ -284,6 +324,7 @@ class LIClient(object):
                     for i in links:
                         f.write(i + '\n')
                 print('Saved backup')
+        # clear file for future
         with open(file, 'w', encoding='utf-8') as f:
             f.write('')
 
@@ -293,8 +334,8 @@ if __name__ == '__main__':
     driver = webdriver.Chrome('C:/Program Files/Mozilla/chromedriver.exe')
     driver.get("https://www.linkedin.com/uas/login")
 
-    username = '--username'
-    password = '--password'
-    liclient = LIClient(driver, username , password)
+    username = input('--username: ')
+    password = input('--password: ')
+    liclient = LIClient(driver, username, password)
     liclient.login()
     liclient.parse_all_jobs()
