@@ -9,5 +9,3 @@ download chrome web driver and point it directory in the main.py during initiali
 
 Remember ! After each hundred of pages LinkedIn gives you a captha to solve. Don't forget to do it.
 But you can still easily scrape 100 jobs per day. 
-
-# todo add exit possibility from parser. 
